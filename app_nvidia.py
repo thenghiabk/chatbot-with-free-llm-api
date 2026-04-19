@@ -93,19 +93,24 @@ def get_greeting(materials: list[tuple]) -> str:
         return os.getenv("GREETING_MESSAGE", DEFAULT_GREETING)
 
 
-# --- Session init ---
+# --- Load materials first (synchronous, before anything else) ---
+if "materials" not in st.session_state:
+    st.session_state.materials = load_materials()
+
+# --- Session init (no API call yet — greet after render) ---
 if "chat_sessions" not in st.session_state:
-    with st.spinner("Loading, please wait…"):
-        mats = load_materials()
-        default_id = str(uuid.uuid4())
-        greeting = get_greeting(mats)
-        st.session_state.chat_sessions = {
-            default_id: {"name": "Chat 1", "messages": [{"role": "assistant", "content": greeting}]}
-        }
-        st.session_state.active_session = default_id
+    default_id = str(uuid.uuid4())
+    st.session_state.chat_sessions = {
+        default_id: {"name": "Chat 1", "messages": []}
+    }
+    st.session_state.active_session = default_id
+    st.session_state.greeting_pending = True
 
 if "active_session" not in st.session_state:
     st.session_state.active_session = next(iter(st.session_state.chat_sessions))
+
+if "greeting_pending" not in st.session_state:
+    st.session_state.greeting_pending = False
 
 
 def get_active():
@@ -145,7 +150,7 @@ st.markdown("""
 PANEL_HEIGHT = 650
 
 # --- Layout ---
-materials = load_materials()
+materials = st.session_state.materials
 left, right = st.columns([2, 3], gap="large")
 
 # --- Left: Materials Panel ---
@@ -186,6 +191,53 @@ with right:
                     with st.expander("🧠 Reasoning", expanded=False):
                         st.markdown(msg["reasoning"])
                 st.markdown(msg["content"])
+
+        # --- Fetch greeting AFTER layout is rendered ---
+        if st.session_state.greeting_pending:
+            st.session_state.greeting_pending = False
+            with st.chat_message("assistant"):
+                thinking_placeholder = st.empty()
+                thinking_placeholder.markdown(
+                    """
+<style>
+@keyframes thinking-dots {
+    0%   { content: ""; }
+    25%  { content: "."; }
+    50%  { content: ".."; }
+    75%  { content: "..."; }
+    100% { content: ""; }
+}
+.thinking-text { font-style: italic; color: gray; }
+.thinking-text::after {
+    content: "";
+    animation: thinking-dots 1.2s steps(1, end) infinite;
+}
+</style>
+<span class="thinking-text">Thinking</span>""",
+                    unsafe_allow_html=True,
+                )
+                content_placeholder = st.empty()
+                greeting_text = ""
+                try:
+                    system_msg = build_system_message(materials)
+                    api_messages = []
+                    if system_msg:
+                        api_messages.append({"role": "system", "content": system_msg})
+                    api_messages.append({
+                        "role": "user",
+                        "content": "Greet the user and ask ONE relevant question to start the conversation. Be concise.",
+                    })
+                    for _, content_chunk in call_nvidia_stream(api_messages):
+                        thinking_placeholder.empty()
+                        if content_chunk:
+                            greeting_text += content_chunk
+                            content_placeholder.markdown(greeting_text)
+                except Exception:
+                    greeting_text = os.getenv("GREETING_MESSAGE", DEFAULT_GREETING)
+                    thinking_placeholder.empty()
+                    content_placeholder.markdown(greeting_text)
+
+                active["messages"].append({"role": "assistant", "content": greeting_text})
 
 # --- Chat Input ---
 prompt = st.chat_input("Type your message...")
