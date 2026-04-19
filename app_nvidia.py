@@ -209,7 +209,29 @@ if prompt:
                         api_messages.append({"role": msg["role"], "content": msg["content"]})
 
                     thinking_placeholder = st.empty()
-                    thinking_placeholder.markdown("_Thinking…_")
+                    thinking_placeholder.markdown(
+                        """
+<style>
+@keyframes thinking-dots {
+    0%   { content: ""; }
+    25%  { content: "."; }
+    50%  { content: ".."; }
+    75%  { content: "..."; }
+    100% { content: ""; }
+}
+.thinking-text {
+    font-style: italic;
+    color: gray;
+}
+.thinking-text::after {
+    content: "";
+    animation: thinking-dots 1.2s steps(1, end) infinite;
+}
+</style>
+<span class="thinking-text">Thinking</span>
+""",
+                        unsafe_allow_html=True,
+                    )
 
                     reasoning_placeholder = st.empty()
                     content_placeholder = st.empty()
