@@ -48,7 +48,7 @@ def resolve_model(env_model: str) -> str:
 
 
 # OPENROUTER_MODEL = resolve_model(os.getenv("OPENROUTER_MODEL", ""))
-OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
+OPENROUTER_MODEL = "deepseek/deepseek-v3.1-terminus"
 
 
 def call_openrouter(messages: list[dict]) -> str:
